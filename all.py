@@ -1,113 +1,92 @@
 import streamlit as st
-import pdfplumber
+# import pdfplumber
 from PIL import Image
+import fitz
+import io
+from transformers import CLIPProcessor, CLIPModel
 
-page_icon = Image.open("./favicon.ico")
-st.set_page_config(page_title="Smart Fill", page_icon=page_icon, layout="wide", initial_sidebar_state="expanded")
-logo = Image.open("./favicon.ico")
+def img2text(uploaded_file):
+    model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14-336")
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
+    if isinstance(uploaded_file, Image.Image):
+        image = uploaded_file
+    else:
+        image = Image.open(uploaded_file)
+
+    array = ["Passport", "Driver License", "Green Card", "401K-statement", "Last-will-and-testament", "life-insurance", "W2-form", "f8889_HSA", "other"]
+    inputs = processor(text=array, images=image, return_tensors="pt", padding=True)
+
+    outputs = model(**inputs)
+    logits_per_image = outputs.logits_per_image  
+    probs = logits_per_image.softmax(dim=1)  
+
+    probs = probs.tolist()
+    flat_probs = [prob for sublist in probs for prob in sublist]
+    max_prob = max(flat_probs)
+    index_of_max = flat_probs.index(max_prob)
     
+    st.write("Your documents have been uploaded successfully. Thanks for submitting your ", array[index_of_max], ".")
+    st.write("We'll take care of the rest.")
+    # st.write("Accuracy - ", max_prob)
+    # return array[index_of_max]
 
 
-        
-
-# Function to extract attributes from PDF document using pdfplumber
-def extract_attributes_from_pdf(file_path):
-    attributes = {}
-
-    with pdfplumber.open(file_path) as pdf:
-        first_page = pdf.pages[0]  # Assuming attributes are on the first page
-
-        # Extract text from the first page
-        text = first_page.extract_text()
-
-        attribute_pairs = [
-            ("Property",),
-            ("Borrower(s)", "Borrower"),
-            ("Seller(s)", "Seller"),
-            ("Loan Amount",),
-            ("Loan Term",),
-            ("Lender",),
-            ("Cash to Close",)
-        ]
-
-        for pair in attribute_pairs:
-            for attribute in pair:
-                if attribute in text:
-                    attribute_index = text.index(attribute)
-                    if attribute != pair[0]:
-                        end_index = text.find("\n", attribute_index)
-                    else:
-                        end_index = text[attribute_index:].find("\n") + attribute_index
-                    attribute_value = text[attribute_index + len(attribute):end_index].strip()
-                    attributes[attribute] = attribute_value  # Store using the exact attribute name as in the PDF
-                    break
-
-    return attributes
-
-# Streamlit UI
-
-st.sidebar.image("FamiologyTextLogo.png", use_column_width=True)
-
-st.markdown(
-
-    """
-
-    <style>
-
-        section[data-testid="stSidebar"] {
-
-            width: 800px !important; # Set the width to your desired value
-
-        }
-
-    </style>
-
-    """,
-
-    unsafe_allow_html=True,
-
-)
-
-        
+# st.sidebar.info("Hello World")
 def main():
-    st.title("Smart Fill - Famiology.io")
-
-
+    img = Image.open('./favicon.ico')
+    # st.set_page_config(page_title="Document Identification")
+    st.set_page_config(page_title='Identify the Document', page_icon='./favicon.ico')
+    with st.sidebar:
+        st.header('About App')
+        st.header('Smart Document Recognition: Instantly Identify Uploaded Documents')
+        st.sidebar.info('Empower your document management process with Smart Document Recognition. This advanced feature swiftly identifies the type of document you upload, making document handling effortless and efficient.')
+        st.header('How It Works: ')
+        st.sidebar.info('Upload Your Document: Select the document you wish to process using the provided file upload button. Intelligent Analysis: Our system employs cutting-edge technology to analyze the documents structure, layout, and content. Automatic Identification: Based on the analysis, Smart Document Recognition accurately identifies the document type, whether its an identification document, real estate document, 401k document or any other document format. Streamlined Processing: With the document type identified, our platform can seamlessly route it to the appropriate workflow or apply predefined actions, saving you valuable time and effort.')
+        st.header('What Problem it Solves?')
+        st.sidebar.info('Efficiency: Instantly recognize document types without manual intervention. Accuracy: Ensure accurate processing and categorization of documents. Productivity: Automate document handling workflows for smoother operations.')
+        st.header('Value') 
+        st.sidebar.info('eVaults are smart and can support automation of client interactions as well as parallel internal ops process . Saves ops time, cleaner data, nudges for clients as well as for internal staff.')
+    uploaded_file = st.file_uploader("Choose a file to upload", type=['png', 'jpeg', 'jpg', 'pdf'])
     
-     # Section 1: Information about Smart Fill
-    with st.sidebar.container():
-        with st.expander("Smart Fill: Automatic Data Prepopulation"):
-            st.write("This intelligent feature automatically populates relevant data fields based on the document you upload. Say goodbye to manual data entry and let Smart Fill do the heavy lifting for you.")
+    if uploaded_file is not None:
+        # Display the uploaded image
+        if uploaded_file.type == 'application/pdf':
+            uploaded_file = pdf_to_img(uploaded_file)
+            st.image(uploaded_file, caption='Uploaded Image.', use_column_width=True)
+            scenario1 = img2text(uploaded_file)
+            # with st.expander("Identified Document Type"):
+            #     print("Thank You for uploading ", st.write(scenario1))
+        else:    
+            st.image(uploaded_file, caption='Uploaded Image.', use_column_width=True)
         
-    # Section 2: Usage Instructions
-    with st.sidebar.container():
-        with st.expander("How It Works"):
-            st.write("1. Upload Your Document: Simply upload your document using the provided file upload button.\n"
-                        "2. Smart Analysis: Our system analyzes the document to identify key data points such as names, addresses, dates, and more. Further we can configure it with reference to domain.\n"
-                        "3. Automatic Prepopulation: Once the analysis is complete, Smart Fill intelligently fills in the corresponding fields in your form, saving you time and effort.\n"
-                        "4. Review and Edit: You always have the final say. Review the pre populated data, make any necessary edits, and proceed with confidence")
-        
-    # Section 3: Additional Notes
-    with st.sidebar.container():
-        with st.expander("What problem it solves:"):
-            st.write("Client Experience: Busy or unmotivated clients  expect automated pre-filled information sourced from AI or backend operations.\n"
-                    "Efficiency: \n" 
-                    "Cut down on manual data entry and reduce processing time.")
+            scenario = img2text(uploaded_file) 
         
         
-    # File upload
-    uploaded_file = st.file_uploader("Upload document (PDF)", type="pdf")
+            # with st.expander("Extracted Text"):
+            #     print("Thank You for uploading ", st.write(scenario))
 
-    if uploaded_file:
-        # Extract attributes from PDF document using pdfplumber
-        attributes = extract_attributes_from_pdf(uploaded_file)
-        if attributes:
-            st.subheader("Pre-filled Attributes")
+def pdf_to_img(uploaded_file):
+    # Open the PDF file
+    pdf_data = uploaded_file.read()
 
-            for key, value in attributes.items():
-                st.text_input(key, value)
-        else:
-            st.info("No attributes identified.")
+    # Create a PDF document object
+    pdf_document = fitz.open(stream=pdf_data, filetype="pdf")
 
-if __name__ == "__main__":
-    main()
+    # Get the first page of the PDF document
+    first_page = pdf_document.load_page(0)
+
+    # Convert the first page to a pixmap
+    pixmap = first_page.get_pixmap()
+
+    # Convert the pixmap to bytes
+    img_bytes = pixmap.tobytes()
+
+    # Create an image from the bytes
+    image = Image.open(io.BytesIO(img_bytes))
+    
+    return image
+           
+        
+
+if __name__ == '__main__':
+        main()
